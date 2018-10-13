@@ -3,6 +3,7 @@ title: "Israel Cycling routes"
 author: "by Michael Berger"
 date: "12 October 2018"
 output: html_document 
+
 ---
 
 ```{r setup, include=FALSE}
