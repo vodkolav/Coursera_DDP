@@ -1,0 +1,73 @@
+---
+title: "Israel Cycling routes"
+author: "Michael Berger"
+date: "16 October 2018"
+output: html_document
+---
+<style>
+body {
+    position: absolute;
+    left: 0px;}
+</style>
+
+Here you can see some circular bycicle routes across northern Israel. The 3 dimensions are Latitiude, Longitude and Elevation. The elevation is in meters and is not to scale.  You may observe individual tracks by double-clicking them in traces menu in top right corner. 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(plotKML)
+library(leaflet)
+library(plotly)
+```
+
+```{r preprocessing, echo=F, message=F, cache=T, fig.align='left'}
+#setwd('Week 2')
+
+preProcGpx <- function(filename)
+{
+  DAT <- readGPX(filename)
+  DAT <- DAT$tracks[[1]]
+  ddat <- DAT[[1]][[1]]
+  for (ii in seq(2,length(DAT)))
+  {
+    ddat <- rbind(ddat,DAT[[ii]])
+  }
+  #df <- ddat[,c('lat','lon')]
+  #df$idx <- as.character(seq(1,372))
+  df <- ddat[-1,]
+  df$elevation <- as.numeric(df$ele)
+  df
+}
+
+files<- list.files(path = '../Week2', pattern = '*.gpx', full.names = T)
+dfs <- lapply(files, FUN = preProcGpx)
+
+cols <- c('#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080', '#ffffff', '#000000') 
+```
+
+
+```{r, fig.width=16, fig.height= 7, echo = F}
+ii<-1
+p <- plot_ly(dfs[[1]], x = ~lat, y = ~lon, z = ~elevation, type = 'scatter3d', mode = 'lines',
+        opacity = 1, line = list(width = 5, color = cols[ii], reverscale = FALSE))
+for (ii in 2:length(dfs))
+{
+  p <- add_trace(p, x = ~lat, y = ~lon, z = ~elevation, data =  dfs[[ii]],
+            line = list(color = cols[ii], width = 5))
+}
+p
+```
+
+
+<!-- ```{r} -->
+
+
+<!-- p -->
+<!-- ``` -->
+
+
+<!-- # ```{r} -->
+<!-- # p <- plot_ly(dfs[[1]], x = ~lat, y = ~lon, stroke = ~ele, strokes = cols, type = 'scatter', mode = 'lines', -->
+<!-- #         opacity = 1)#, line = list(width = 6, color = ~ele, reverscale = FALSE)) -->
+<!-- # p -->
+<!-- # ``` -->
+
+
