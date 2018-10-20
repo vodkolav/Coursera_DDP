@@ -1,26 +1,85 @@
+library(dplyr)
 library(shiny)
 library(ggplot2)
+library(caTools)
+library(caret)
+library(randomForest)
+library(iterators,quietly=TRUE)
+library(parallel,quietly=TRUE)
+library(foreach,quietly=TRUE)
+library(doParallel,quietly=TRUE)
+dataset = read.csv('Social.csv')
+
+dataset[-3] = scale(dataset[-3])
+dataset$Purchased = factor(dataset$Purchased, levels = c(0, 1))
+
+debug = F
+
+if (debug){
+  dataset = read.csv('Week4/Social.csv')
+  dataset[-3] = scale(dataset[-3])
+  dataset$Purchased = factor(dataset$Purchased, levels = c(0, 1))
+  vals <- NULL
+  vals$Ads = dataset
+  vals$Grid = 1
+  vals$method <- 'rf'
+}
+
 shinyServer(function(input, output) {
   
   vals <- reactiveValues(
     
-    trees = eval(trees)
-    #keeprows = rep(TRUE, nrow(mtcars))
+    Ads = dataset,
+    Grid = NULL,
+    Raster = NULL,
+    LastModel = ""
+    #keeprows = rep(TRUE, nrow(mtcars)) trees
   )
-  
+
   observeEvent(input$click1, {
-    res <- nearPoints(vals$trees, input$click1, xvar = "Girth",  yvar = "Volume", threshold = 5, allRows = T, addDist = T)
+    res <- nearPoints(vals$Ads, input$click1, xvar = "Age",  yvar = "EstimatedSalary", threshold = 3, allRows = T, addDist = T)
     
-    if (sum(res$selected_)==0){
+    if (sum(res$selected_)==0){ #adding point
       pts <- input$click1
-      vals$trees <- rbind(vals$trees, list(Girth = pts$x, Height = 10, Volume = pts$y))
+      vals$Ads <- rbind(vals$Ads, list(Age = pts$x, Purchased = input$rbtnPrchsd, EstimatedSalary = pts$y))
     }
-    else{
-      vals$trees <- vals$trees[!res$selected_,]
+    else{                       #removing existing point
+      vals$Ads <- vals$Ads[!res$selected_,]
     }
 
   })
   
+  
+  observeEvent(input$btnTrain, {
+    output$lblMessages <- renderText({"Training the model. Please wait..."})
+    availCores <- detectCores()
+    cluster <- makeCluster(availCores-1)
+    registerDoParallel(cluster)
+
+    method <- input$method
+    tC = trainControl(method="cv", number=availCores-1, allowParallel=TRUE)
+    model <-train( Purchased ~ . , data = vals$Ads ,method=method, trControl = tC)
+    print(model$times$everything)
+    set = vals$Ads
+    X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01)
+    X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
+    grid_set = expand.grid(X1, X2)
+    colnames(grid_set) = c('Age', 'EstimatedSalary')
+    grid_set$Purchased = predict(model, grid_set)
+    vals$Grid <-grid_set
+    vals$LastModel <- method
+  
+    
+    if(!is.null(vals$Grid)){
+      vals$raster <- geom_raster(data = vals$Grid, aes(Age, EstimatedSalary, fill = Purchased))
+    }
+    
+    #output$intOut <- renderText({mtd})
+    
+    stopCluster(cluster)
+    output$lblMessages <- renderText({"Training Finished"})
+    
+  })
   # model <- reactive({
   #   clickData <-  input$click1
   #   #brushed_data <-  brushedPoints(trees, input$brush1, xvar = "Girth", yvar = "Volume")
@@ -55,8 +114,19 @@ shinyServer(function(input, output) {
   output$plot1 <- renderPlot({
     #pts <- model()
     #trees<- rbind(trees, list(Girth = pts$x, Height = pts$y, Volume = 10))
-    ggplot(data = vals$trees)  +   geom_point(aes(x = Girth, y = Volume ))
+    #
+    g <- ggplot() + ggtitle(vals$method)
+    if(!is.null(vals$Grid)){
+      g <- g  + vals$raster
+    }
+    g<-g+ geom_point(data = vals$Ads, aes(x = Age, y = EstimatedSalary, fill = Purchased) ,col = 'black', shape =  21, size = 2 )
+    
+    g
+})  
   
+})  
+  
+   # ggplot(data = dataset)  +   geom_point(aes(x = Age, y = EstimatedSalary, color = Purchased ))
     
     
     #xlab = "Girth",  ylab = "Volume", main = "Tree Measurements", cex = 1.5, pch = 16, bty = "n"  
@@ -66,7 +136,9 @@ shinyServer(function(input, output) {
        #  !is.null(model())){
     #   points(model()$x, model()$y, col = "blue", lwd = 2)
     #}
-  })
+    
+    
+    
+    
+
   
-  
-})
