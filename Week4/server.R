@@ -4,10 +4,13 @@ library(ggplot2)
 library(caTools)
 library(caret)
 library(randomForest)
+library(e1071)
+library(lattice)
 library(iterators,quietly=TRUE)
 library(parallel,quietly=TRUE)
 library(foreach,quietly=TRUE)
 library(doParallel,quietly=TRUE)
+library(profvis)
 dataset = read.csv('Social.csv')
 
 dataset[-3] = scale(dataset[-3])
@@ -23,6 +26,8 @@ if (debug){
   vals$Ads = dataset
   vals$Grid = 1
   vals$method <- 'rf'
+  input = NULL
+  input$method <- 'glm'
 }
 
 shinyServer(function(input, output) {
@@ -52,32 +57,36 @@ shinyServer(function(input, output) {
   
   observeEvent(input$btnTrain, {
     output$lblMessages <- renderText({"Training the model. Please wait..."})
-    availCores <- detectCores()
-    cluster <- makeCluster(availCores-1)
-    registerDoParallel(cluster)
-
-    method <- input$method
-    tC = trainControl(method="cv", number=availCores-1, allowParallel=TRUE)
-    model <-train( Purchased ~ . , data = vals$Ads ,method=method, trControl = tC)
-    print(model$times$everything)
-    set = vals$Ads
-    X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01)
-    X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
-    grid_set = expand.grid(X1, X2)
-    colnames(grid_set) = c('Age', 'EstimatedSalary')
-    grid_set$Purchased = predict(model, grid_set)
-    vals$Grid <-grid_set
-    vals$LastModel <- method
-  
+    profile <- profvis({    
+      #availCores <- detectCores()
+      availCores <- input$numNCores
+      cluster <- makeCluster(availCores)
+      registerDoParallel(cluster)
+      
+      tC = trainControl(method="cv", number=availCores-1, allowParallel=T)
+      #tC = trainControl(method="none",allowParallel=F)
+      model <-train( Purchased ~ . , data = vals$Ads ,method=input$method, trControl = tC)
+      print(model$times$everything)
+      set = vals$Ads
+      X1 = seq(min(set[, 1]) , max(set[, 1]) , by = 0.05)
+      X2 = seq(min(set[, 2]) , max(set[, 2]) , by = 0.05)
+      grid_set = expand.grid(X1, X2)
+      colnames(grid_set) = c('Age', 'EstimatedSalary')
+      grid_set$Purchased = predict(model, grid_set)
+      vals$Grid <-grid_set
+      vals$LastModel <- input$method
     
-    if(!is.null(vals$Grid)){
-      vals$raster <- geom_raster(data = vals$Grid, aes(Age, EstimatedSalary, fill = Purchased))
-    }
-    
+      
+      if(!is.null(vals$Grid)){
+        vals$raster <- geom_raster(data = vals$Grid, aes(Age, EstimatedSalary, fill = Purchased))
+      }
+    stopCluster(cluster)      
+    })
+    save(profile, file = 'profile.rdata')
     #output$intOut <- renderText({mtd})
     
-    stopCluster(cluster)
-    output$lblMessages <- renderText({"Training Finished"})
+
+    output$lblMessages <- renderText({paste(vals$LastModel, "training Finished on", availCores ,"cores")})
     
   })
   # model <- reactive({
