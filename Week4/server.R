@@ -4,6 +4,8 @@ library(ggplot2)
 library(caTools)
 library(caret)
 library(randomForest)
+library(fastAdaboost)
+library(kknn)
 library(e1071)
 library(lattice)
 library(iterators,quietly=TRUE)
@@ -11,17 +13,18 @@ library(parallel,quietly=TRUE)
 library(foreach,quietly=TRUE)
 library(doParallel,quietly=TRUE)
 library(profvis)
+
 dataset = read.csv('Social.csv')
 
 dataset[-3] = scale(dataset[-3])
-dataset$Purchased = factor(dataset$Purchased, levels = c(0, 1))
+dataset$Purchased = factor(dataset$Purchased, levels = c(0,1), labels = c("No" ,"Yes"))
 
 debug = F
 
 if (debug){
   dataset = read.csv('Week4/Social.csv')
   dataset[-3] = scale(dataset[-3])
-  dataset$Purchased = factor(dataset$Purchased, levels = c(0, 1))
+  dataset$Purchased = factor(dataset$Purchased, levels = c(0,1), labels = c("No" ,"Yes"))
   vals <- NULL
   vals$Ads = dataset
   vals$Grid = 1
@@ -59,14 +62,14 @@ shinyServer(function(input, output) {
     output$lblMessages <- renderText({"Training the model. Please wait..."})
     profile <- profvis({    
       #availCores <- detectCores()
-      availCores <- input$numNCores
+      availCores <- input$numCores
       cluster <- makeCluster(availCores)
       registerDoParallel(cluster)
       
       tC = trainControl(method="cv", number=availCores-1, allowParallel=T)
       #tC = trainControl(method="none",allowParallel=F)
       model <-train( Purchased ~ . , data = vals$Ads ,method=input$method, trControl = tC)
-      print(model$times$everything)
+      #print(model$times$everything)
       set = vals$Ads
       X1 = seq(min(set[, 1]) , max(set[, 1]) , by = 0.05)
       X2 = seq(min(set[, 2]) , max(set[, 2]) , by = 0.05)
@@ -82,11 +85,12 @@ shinyServer(function(input, output) {
       }
     stopCluster(cluster)      
     })
-    save(profile, file = 'profile.rdata')
+    save(profile, file = 'profiling/profile.rdata')
     #output$intOut <- renderText({mtd})
     
 
-    output$lblMessages <- renderText({paste(vals$LastModel, "training Finished on", availCores ,"cores")})
+    output$lblMessages <- renderText({paste(vals$LastModel, "training finished with", availCores ,"cores in ",
+                                            sprintf("%.2f",model$times$everything['elapsed']), "seconds")})
     
   })
   # model <- reactive({
@@ -124,7 +128,7 @@ shinyServer(function(input, output) {
     #pts <- model()
     #trees<- rbind(trees, list(Girth = pts$x, Height = pts$y, Volume = 10))
     #
-    g <- ggplot() + ggtitle(vals$method)
+    g <- ggplot() + ggtitle(vals$method) + theme(legend.position="left")
     if(!is.null(vals$Grid)){
       g <- g  + vals$raster
     }
