@@ -1,0 +1,95 @@
+---
+title: "A visual demonstration of some popular Machine Learning models"
+author: "Michael Berger"
+date: "23 October 2018"
+output:
+  ioslides_presentation: default
+
+always_allow_html: yes
+---
+
+<!--   beamer_presentation: 
+  slidy_presentation:  -->
+  
+## What is this?
+
+[This app](https://michaelbergere.shinyapps.io/Week4/) allows you to visualise what prediction boundaries for some of machine learning models look like.
+
+It trains a selected model on provided data and then the model predicts a value for each point of (x,y) plane in a defined domain with defined resolution. So basically the whole plane is the test set.  
+  
+The datasets are limited to 2 independent variables due to 2D nature of the plots. However the dependent variable might be extended to 3 or more classes in the future (Not really, I will not return to this project after the course:).  
+All independent variables are scaled in terms of standard deviations.  
+All models are powered by caret  
+
+```{r load_lib_data, echo=F, message=F, warning=FALSE}
+
+    library(dplyr,quietly=TRUE )
+    library(shiny,quietly=TRUE)
+    library(ggplot2,quietly=TRUE)
+    library(caTools,quietly=TRUE)
+    library(caret,quietly=TRUE)
+    library(randomForest,quietly=TRUE)
+    library(fastAdaboost,quietly=TRUE)
+    library(kknn,quietly=TRUE)
+    library(e1071,quietly=TRUE)
+    library(lattice,quietly=TRUE)
+    library(iterators,quietly=TRUE)
+    library(parallel,quietly=TRUE)
+    library(foreach,quietly=TRUE)
+    library(doParallel,quietly=TRUE)
+
+    dataset = read.csv('Social.csv')
+    dataset[-3] = scale(dataset[-3])
+    dataset$Purchased = factor(dataset$Purchased, levels = c(0,1), labels = c("No" ,"Yes"))
+    
+    availCores <- detectCores()
+    cluster <- makeCluster(availCores)
+    registerDoParallel(cluster)
+```
+
+```{r training, echo=F, message=FALSE, warning=FALSE, cache=T, include=F}
+   tC = trainControl(method="cv", number=availCores-1, allowParallel=T)
+    model <-train( Purchased ~ . , data = dataset ,method='rf', trControl = tC)
+```
+  
+    
+```{r plotting, echo=F, message=F, warning=FALSE, cache=T}
+    X1 = seq(min(dataset[, 1]) , max(dataset[, 1]) , by = 0.05)
+    X2 = seq(min(dataset[, 2]) , max(dataset[, 2]) , by = 0.05)
+    grid_set = expand.grid(X1, X2)
+    colnames(grid_set) = c('Age', 'EstimatedSalary')
+    grid_set$Purchased = predict(model, grid_set)
+    stopCluster(cluster)    
+      
+    g <- ggplot() + ggtitle('Random forest') + theme(legend.position="left") +
+    geom_raster(data = grid_set, aes(Age, EstimatedSalary, fill = Purchased)) +
+    geom_point(data = dataset, aes(x = Age, y = EstimatedSalary, fill = Purchased) ,col = 'black', shape =  21, size = 2 )
+```
+
+
+
+## The typical workflow is as follows:  
+- Add points to the graph by clicking on it.  
+- Remove points you don't like by clicking on them.
+- Select model type  
+- Leave number of cores as it is. With more cores the app will probably crash due to memory limitation of the free tier shinyapps hosting. If it still crashes, try to reduce number of cores  
+- Press "Train the model" button and wait up to a dosen seconds.  
+- Observe.  
+- Repeat with other models and points.  
+- Contemlate the difference between linear and various nonlinear classifiers.  
+
+## Example
+Here is an example of app's performance with Random forest model. The black circles represent training data. 
+Every new point in red area will be classified as "No" and in the blue area as "Yes". 
+```{r, echo = F, message= F}
+g
+```
+
+##What may be improved or added
+- currently every time you train a model, it replaces the previous one, so if you want to turn back to a see a previous one, you have to train it again.  
+- adding more models
+- uploading user datasets 
+- allowing datasets with more than 2 classes
+- adding points in "drawing" style instead of clicking them one by one  
+
+Have fun! 

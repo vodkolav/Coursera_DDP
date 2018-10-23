@@ -76,12 +76,12 @@ shinyServer(function(input, output) {
       grid_set = expand.grid(X1, X2)
       colnames(grid_set) = c('Age', 'EstimatedSalary')
       grid_set$Purchased = predict(model, grid_set)
-      vals$Grid <-grid_set
+      #vals$Grid <-grid_set
       vals$LastModel <- input$method
     
       
-      if(!is.null(vals$Grid)){
-        vals$raster <- geom_raster(data = vals$Grid, aes(Age, EstimatedSalary, fill = Purchased))
+      if(!is.null(grid_set)){
+        vals$raster <- geom_raster(data = grid_set, aes(Age, EstimatedSalary, fill = Purchased))
       }
     stopCluster(cluster)      
     })
@@ -129,7 +129,7 @@ shinyServer(function(input, output) {
     #trees<- rbind(trees, list(Girth = pts$x, Height = pts$y, Volume = 10))
     #
     g <- ggplot() + ggtitle(vals$method) + theme(legend.position="left")
-    if(!is.null(vals$Grid)){
+    if(!is.null(vals$raster)){
       g <- g  + vals$raster
     }
     g<-g+ geom_point(data = vals$Ads, aes(x = Age, y = EstimatedSalary, fill = Purchased) ,col = 'black', shape =  21, size = 2 )
