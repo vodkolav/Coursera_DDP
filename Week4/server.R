@@ -12,12 +12,14 @@ library(iterators,quietly=TRUE)
 library(parallel,quietly=TRUE)
 library(foreach,quietly=TRUE)
 library(doParallel,quietly=TRUE)
-library(profvis)
+#library(profvis)
+library(klaR)
+
 
 dataset = read.csv('Social.csv')
-
 dataset[-3] = scale(dataset[-3])
 dataset$Purchased = factor(dataset$Purchased, levels = c(0,1), labels = c("No" ,"Yes"))
+
 
 debug = F
 
@@ -38,11 +40,13 @@ shinyServer(function(input, output) {
   vals <- reactiveValues(
     
     Ads = dataset,
-    Grid = NULL,
+    #Grid = NULL,
     Raster = NULL,
     LastModel = ""
     #keeprows = rep(TRUE, nrow(mtcars)) trees
   )
+  print('hello')
+  rm(dataset)
 
   observeEvent(input$click1, {
     res <- nearPoints(vals$Ads, input$click1, xvar = "Age",  yvar = "EstimatedSalary", threshold = 3, allRows = T, addDist = T)
@@ -60,32 +64,35 @@ shinyServer(function(input, output) {
   
   observeEvent(input$btnTrain, {
     output$lblMessages <- renderText({"Training the model. Please wait..."})
-    profile <- profvis({    
+    # if(exists("dataset")){
+    #   rm(dataset)
+    # }
+    # profile <- profvis({    
       #availCores <- detectCores()
-      availCores <- input$numCores
-      cluster <- makeCluster(availCores)
-      registerDoParallel(cluster)
-      
-      tC = trainControl(method="cv", number=availCores-1, allowParallel=T)
-      #tC = trainControl(method="none",allowParallel=F)
-      model <-train( Purchased ~ . , data = vals$Ads ,method=input$method, trControl = tC)
-      #print(model$times$everything)
-      set = vals$Ads
-      X1 = seq(min(set[, 1]) , max(set[, 1]) , by = 0.05)
-      X2 = seq(min(set[, 2]) , max(set[, 2]) , by = 0.05)
-      grid_set = expand.grid(X1, X2)
-      colnames(grid_set) = c('Age', 'EstimatedSalary')
-      grid_set$Purchased = predict(model, grid_set)
-      #vals$Grid <-grid_set
-      vals$LastModel <- input$method
+    availCores <- input$numCores
+    cluster <- makeCluster(availCores)
+    registerDoParallel(cluster)
     
-      
-      if(!is.null(grid_set)){
-        vals$raster <- geom_raster(data = grid_set, aes(Age, EstimatedSalary, fill = Purchased))
-      }
+    tC = trainControl(method="cv", number=availCores-1, allowParallel=T)
+    #tC = trainControl(method="none",allowParallel=F)
+    model <-train( Purchased ~ . , data = vals$Ads ,method=input$method, trControl = tC)
+    #print(model$times$everything)
+    #set = vals$Ads
+    X1 = seq(min(vals$Ads[, 1]) , max(vals$Ads[, 1]) , by = 0.05)
+    X2 = seq(min(vals$Ads[, 2]) , max(vals$Ads[, 2]) , by = 0.05)
+    grid_set = expand.grid(X1, X2)
+    colnames(grid_set) = c('Age', 'EstimatedSalary')
+    grid_set$Purchased = predict(model, grid_set)
+    #vals$Grid <-grid_set
+    vals$LastModel <- input$method
+  
+    
+    if(!is.null(grid_set)){
+      vals$raster <- geom_raster(data = grid_set, aes(Age, EstimatedSalary, fill = Purchased))
+    }
     stopCluster(cluster)      
-    })
-    save(profile, file = 'profiling/profile.rdata')
+    # })
+    # save(profile, file = 'profiling/profile.rdata')
     #output$intOut <- renderText({mtd})
     
 
